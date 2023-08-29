@@ -1,11 +1,11 @@
 package org.cryptomator.presentation.presenter
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.widget.Toast
+import androidx.core.net.toFile
 import org.cryptomator.data.cloud.crypto.CryptoFolder
 import org.cryptomator.domain.Cloud
 import org.cryptomator.domain.CloudFile
@@ -77,7 +77,6 @@ import org.cryptomator.presentation.workflow.ActivityResult
 import org.cryptomator.presentation.workflow.AddExistingVaultWorkflow
 import org.cryptomator.presentation.workflow.AuthenticationExceptionHandler
 import org.cryptomator.presentation.workflow.CreateNewVaultWorkflow
-import org.cryptomator.presentation.workflow.PermissionsResult
 import org.cryptomator.presentation.workflow.Workflow
 import org.cryptomator.util.ExceptionUtil
 import org.cryptomator.util.SharedPreferencesHandler
@@ -232,7 +231,7 @@ class BrowseFilesPresenter @Inject constructor( //
 
 	@Callback(dispatchResultOkOnly = false)
 	fun getCloudListAfterAuthentication(result: ActivityResult, cloudFolderModel: CloudFolderModel) {
-		if(result.isResultOk) {
+		if (result.isResultOk) {
 			val cloudModel = result.getSingleResult(CloudModel::class.java)
 			val cloudNode = cloudFolderModel.toCloudNode()
 			if (cloudNode is CryptoFolder) {
@@ -263,6 +262,7 @@ class BrowseFilesPresenter @Inject constructor( //
 					view?.updateActiveFolderDueToAuthenticationProblem(folder)
 					getCloudList(folder)
 				}
+
 				override fun onFinished() {
 					resumedAfterAuthentication = false
 				}
@@ -531,14 +531,16 @@ class BrowseFilesPresenter @Inject constructor( //
 
 	private fun viewExternalFile(cloudFile: CloudFileModel) {
 		val viewFileIntent = Intent(Intent.ACTION_VIEW)
-		fileUtil.contentUriFor(cloudFile).let {
-			uriToOpenedFile = it
+		var openFileType = OpenFileType.DEFAULT
+		uriToOpenedFile = if (useMicrosoftWorkaround(cloudFile)) {
+			openFileType = OpenFileType.MICROSOFT_WORKAROUND
+			Uri.fromFile(fileUtil.getLegacyFileForMicrosoftWorkaround(cloudFile))
+		} else {
+			fileUtil.contentUriFor(cloudFile)
+		}.also {
 			openedCloudFile = cloudFile
 			openedCloudFileMd5 = calculateDigestFromUri(it)
-			viewFileIntent.setDataAndType( //
-				uriToOpenedFile,  //
-				mimeTypes.fromFilename(cloudFile.name)?.toString()
-			)
+			viewFileIntent.setDataAndType(it, mimeTypes.fromFilename(cloudFile.name)?.toString())
 			viewFileIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
 			if (sharedPreferencesHandler.keepUnlockedWhileEditing()) {
 				openWritableFileNotification = OpenWritableFileNotification(context(), it)
@@ -546,8 +548,117 @@ class BrowseFilesPresenter @Inject constructor( //
 				val cryptomatorApp = activity().application as CryptomatorApp
 				cryptomatorApp.suspendLock()
 			}
-			activity().startActivityForResult(viewFileIntent, OPEN_FILE_FINISHED)
+			requestActivityResult(ActivityResultCallbacks.openFileFinished(openFileType), viewFileIntent)
 		}
+	}
+
+	enum class OpenFileType {
+		DEFAULT, MICROSOFT_WORKAROUND
+	}
+
+	private fun useMicrosoftWorkaround(cloudFile: CloudFileModel): Boolean {
+		return sharedPreferencesHandler.microsoftWorkaround()
+				&& cloudFile.name.contains(".")
+				&& microsoftExtensions().contains(cloudFile.name.substring(cloudFile.name.lastIndexOf(".") + 1, cloudFile.name.length))
+	}
+
+	private fun microsoftExtensions(): Array<out String> {
+		return context().resources.getStringArray(R.array.microsoft_extensions);
+	}
+
+	@Callback(dispatchResultOkOnly = false)
+	fun openFileFinished(result: ActivityResult, openFileType: OpenFileType) {
+		try {
+			// necessary see https://community.cryptomator.org/t/android-tabelle-nach-upload-unlesbar/6550
+			Thread.sleep(500)
+		} catch (e: InterruptedException) {
+			Timber.tag("BrowseFilesPresenter").e(e, "Failed to sleep after resuming editing, necessary for google office apps")
+		}
+		if (sharedPreferencesHandler.keepUnlockedWhileEditing()) {
+			val cryptomatorApp = activity().application as CryptomatorApp
+			cryptomatorApp.unSuspendLock()
+		}
+		hideWritableNotification()
+
+		context().revokeUriPermission(uriToOpenedFile, Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+		uriToOpenedFile?.let {
+			try {
+				calculateDigestFromUri(it)?.let { hashAfterEdit ->
+					openedCloudFileMd5?.let { hashBeforeEdit ->
+						if (hashAfterEdit.contentEquals(hashBeforeEdit)) {
+							Timber.tag("BrowseFilesPresenter").i("Opened app finished, file not changed")
+							deleteFileIfMicrosoftWorkaround(openFileType, uriToOpenedFile)
+						} else {
+							uploadChangedFile(openFileType)
+						}
+					} ?: deleteFileIfMicrosoftWorkaround(openFileType, uriToOpenedFile)
+				}
+			} catch (e: FileNotFoundException) {
+				Timber.tag("BrowseFilesPresenter").e(e, "Failed to read back changes, file isn't present anymore")
+				Toast.makeText(context(), R.string.error_file_not_found_after_opening_using_3party, Toast.LENGTH_LONG).show()
+			}
+		}
+	}
+
+	private fun uploadChangedFile(openFileType: OpenFileType) {
+		view?.showUploadDialog(1)
+		openedCloudFile?.let { openedCloudFile ->
+			openedCloudFile.parent?.let { openedCloudFilesParent ->
+				uriToOpenedFile?.let { uriToOpenedFile ->
+					uploadFilesUseCase //
+						.withParent(openedCloudFilesParent.toCloudNode()) //
+						.andFiles(listOf(createUploadFile(openedCloudFile.name, uriToOpenedFile, true))) //
+						.run(object : DefaultProgressAwareResultHandler<List<CloudFile>, UploadState>() {
+							override fun onProgress(progress: Progress<UploadState>) {
+								view?.showProgress(progressModelMapper.toModel(progress))
+							}
+
+							override fun onSuccess(files: List<CloudFile>) {
+								files.forEach { file ->
+									view?.addOrUpdateCloudNode(cloudFileModelMapper.toModel(file))
+								}
+								deleteFileIfMicrosoftWorkaround(openFileType, uriToOpenedFile)
+								onFileUploadCompleted()
+							}
+
+							override fun onError(e: Throwable) {
+								onFileUploadError()
+								if (ExceptionUtil.contains(e, CloudNodeAlreadyExistsException::class.java)) {
+									ExceptionUtil.extract(e, CloudNodeAlreadyExistsException::class.java).get().message?.let {
+										onCloudNodeAlreadyExists(it)
+									} ?: super.onError(e)
+								} else {
+									super.onError(e)
+								}
+							}
+						})
+				}
+			}
+		}
+	}
+
+	private fun deleteFileIfMicrosoftWorkaround(openFileType: OpenFileType, uriToOpenedFile: Uri?) {
+		if (openFileType == OpenFileType.MICROSOFT_WORKAROUND) {
+			uriToOpenedFile?.toFile()?.delete()
+		}
+	}
+
+	private fun hideWritableNotification() {
+		// openWritableFileNotification can not be made serializable because of this, can be null after Activity resumed
+		openWritableFileNotification?.hide() ?: OpenWritableFileNotification(context(), Uri.EMPTY).hide()
+	}
+
+	@Throws(FileNotFoundException::class)
+	private fun calculateDigestFromUri(uri: Uri): ByteArray? {
+		val digest = MessageDigest.getInstance("MD5")
+		DigestInputStream(context().contentResolver.openInputStream(uri), digest).use { dis ->
+			val buffer = ByteArray(4096)
+			// Read all bytes:
+			while (dis.read(buffer) > -1) {
+			}
+		}
+		return digest.digest()
 	}
 
 	private val previewCloudFileNodes: ArrayList<CloudFileModel>
@@ -785,7 +896,7 @@ class BrowseFilesPresenter @Inject constructor( //
 	private fun exportNodesToUserSelectedLocation(nodesToExport: ArrayList<CloudNodeModel<*>>, exportOperation: ExportOperation) {
 		try {
 			requestActivityResult( //
-				ActivityResultCallbacks.pickedLocalStorageLocation(nodesToExport, exportOperation),  //
+				ActivityResultCallbacks.pickedLocalStorageLocationForBrowsingFiles(nodesToExport, exportOperation),  //
 				Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
 			)
 		} catch (exception: ActivityNotFoundException) {
@@ -801,7 +912,7 @@ class BrowseFilesPresenter @Inject constructor( //
 	}
 
 	@Callback
-	fun pickedLocalStorageLocation(
+	fun pickedLocalStorageLocationForBrowsingFiles(
 		result: ActivityResult,  //
 		nodesToExport: ArrayList<CloudNodeModel<*>>,  //
 		exportOperation: ExportOperation
@@ -939,51 +1050,29 @@ class BrowseFilesPresenter @Inject constructor( //
 
 	@Callback
 	fun exportFileToUserSelectedLocation(result: ActivityResult, fileToExport: CloudFileModel, exportOperation: ExportOperation) {
-		requestPermissions(
-			PermissionsResultCallbacks.exportFileToUserSelectedLocation(result.intent().dataString, fileToExport, exportOperation),  //
-			R.string.permission_message_export_file,  //
-			Manifest.permission.READ_EXTERNAL_STORAGE
-		)
-	}
-
-	@Callback
-	fun exportFileToUserSelectedLocation(result: PermissionsResult, uriString: String?, fileToExport: CloudFileModel, exportOperation: ExportOperation) {
-		if (result.granted()) {
-			try {
-				val downloadFile = DownloadFile.Builder() //
-					.setDownloadFile(fileToExport.toCloudNode()) //
-					.setDataSink(contentResolverUtil.openOutputStream(Uri.parse(uriString))) //
-					.build()
-				exportOperation.export(this, listOf(downloadFile))
-			} catch (e: FileNotFoundException) {
-				showError(e)
-			}
+		try {
+			val downloadFile = DownloadFile.Builder() //
+				.setDownloadFile(fileToExport.toCloudNode()) //
+				.setDataSink(contentResolverUtil.openOutputStream(Uri.parse(result.intent().dataString))) //
+				.build()
+			exportOperation.export(this, listOf(downloadFile))
+		} catch (e: FileNotFoundException) {
+			showError(e)
 		}
 	}
 
 	fun onUploadFilesClicked(folder: CloudFolderModel) {
 		uploadLocation = folder
-		requestPermissions(
-			PermissionsResultCallbacks.selectFiles(),  //
-			R.string.permission_message_upload_file,  //
-			Manifest.permission.READ_EXTERNAL_STORAGE
-		)
+		var intent = Intent(Intent.ACTION_GET_CONTENT)
+		intent.addCategory(Intent.CATEGORY_OPENABLE)
+		intent.type = "*/*"
+		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+		intent = Intent.createChooser(intent, context().getString(R.string.screen_file_browser_upload_files_chooser_title))
+		requestActivityResult(ActivityResultCallbacks.selectedFiles(), intent)
 	}
 
 	fun onUploadCanceled() {
 		uploadFilesUseCase.cancel()
-	}
-
-	@Callback
-	fun selectFiles(result: PermissionsResult) {
-		if (result.granted()) {
-			var intent = Intent(Intent.ACTION_GET_CONTENT)
-			intent.addCategory(Intent.CATEGORY_OPENABLE)
-			intent.type = "*/*"
-			intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-			intent = Intent.createChooser(intent, context().getString(R.string.screen_file_browser_upload_files_chooser_title))
-			requestActivityResult(ActivityResultCallbacks.selectedFiles(), intent)
-		}
 	}
 
 	@Callback
@@ -1156,7 +1245,7 @@ class BrowseFilesPresenter @Inject constructor( //
 	}
 
 	fun onFolderReloadContent(folder: CloudFolderModel) {
-		if(!resumedAfterAuthentication) {
+		if (!resumedAfterAuthentication) {
 			getCloudList(folder)
 		}
 	}
@@ -1174,92 +1263,6 @@ class BrowseFilesPresenter @Inject constructor( //
 
 	fun invalidateOptionsMenu() {
 		activity().invalidateOptionsMenu()
-	}
-
-	fun openFileFinished() {
-		try {
-			// necessary see https://community.cryptomator.org/t/android-tabelle-nach-upload-unlesbar/6550
-			Thread.sleep(500)
-		} catch (e: InterruptedException) {
-			Timber.tag("BrowseFilesPresenter").e(e, "Failed to sleep after resuming editing, necessary for google office apps")
-		}
-		if (sharedPreferencesHandler.keepUnlockedWhileEditing()) {
-			val cryptomatorApp = activity().application as CryptomatorApp
-			cryptomatorApp.unSuspendLock()
-		}
-		hideWritableNotification()
-
-		context().revokeUriPermission(uriToOpenedFile, Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-		uriToOpenedFile?.let {
-			try {
-				calculateDigestFromUri(it)?.let { hashAfterEdit ->
-					openedCloudFileMd5?.let { hashBeforeEdit ->
-						if (hashAfterEdit.contentEquals(hashBeforeEdit)) {
-							Timber.tag("BrowseFilesPresenter").i("Opened app finished, file not changed")
-						} else {
-							uploadChangedFile()
-						}
-					}
-				}
-			} catch (e: FileNotFoundException) {
-				Timber.tag("BrowseFilesPresenter").e(e, "Failed to read back changes, file isn't present anymore")
-				Toast.makeText(context(), R.string.error_file_not_found_after_opening_using_3party, Toast.LENGTH_LONG).show()
-			}
-		}
-	}
-
-	private fun uploadChangedFile() {
-		view?.showUploadDialog(1)
-		openedCloudFile?.let { openedCloudFile ->
-			openedCloudFile.parent?.let { openedCloudFilesParent ->
-				uriToOpenedFile?.let { uriToOpenedFile ->
-					uploadFilesUseCase //
-						.withParent(openedCloudFilesParent.toCloudNode()) //
-						.andFiles(listOf(createUploadFile(openedCloudFile.name, uriToOpenedFile, true))) //
-						.run(object : DefaultProgressAwareResultHandler<List<CloudFile>, UploadState>() {
-							override fun onProgress(progress: Progress<UploadState>) {
-								view?.showProgress(progressModelMapper.toModel(progress))
-							}
-
-							override fun onSuccess(files: List<CloudFile>) {
-								files.forEach { file ->
-									view?.addOrUpdateCloudNode(cloudFileModelMapper.toModel(file))
-								}
-								onFileUploadCompleted()
-							}
-
-							override fun onError(e: Throwable) {
-								onFileUploadError()
-								if (ExceptionUtil.contains(e, CloudNodeAlreadyExistsException::class.java)) {
-									ExceptionUtil.extract(e, CloudNodeAlreadyExistsException::class.java).get().message?.let {
-										onCloudNodeAlreadyExists(it)
-									} ?: super.onError(e)
-								} else {
-									super.onError(e)
-								}
-							}
-						})
-				}
-			}
-		}
-	}
-
-	private fun hideWritableNotification() {
-		// openWritableFileNotification can not be made serializable because of this, can be null after Activity resumed
-		openWritableFileNotification?.hide() ?: OpenWritableFileNotification(context(), Uri.EMPTY).hide()
-	}
-
-	@Throws(FileNotFoundException::class)
-	private fun calculateDigestFromUri(uri: Uri): ByteArray? {
-		val digest = MessageDigest.getInstance("MD5")
-		DigestInputStream(context().contentResolver.openInputStream(uri), digest).use { dis ->
-			val buffer = ByteArray(8192)
-			// Read all bytes:
-			while (dis.read(buffer) > -1) {
-			}
-		}
-		return digest.digest()
 	}
 
 	interface ExportOperation : Serializable {

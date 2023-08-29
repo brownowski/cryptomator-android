@@ -8,6 +8,9 @@
 	<string name="error_authentication_failed_re_authenticate">Bigo ang pagtutunay, maaaring maglogin gamit ang %1$s</string>
 	<string name="error_no_network_connection">Walang koneksyon sa network</string>
 	<string name="error_invalid_passphrase">Mali ang password</string>
+	<string name="error_file_or_folder_exists">Mayroon nang file or folder na kapareha.</string>
+	<string name="error_vault_version_not_supported">Ang bersyon %1$s nang Vault ay hindi suportado. Ang vault na ito ay gawa sa mas luma o bago na bersyon nang Cryptomator.</string>
+	<string name="error_vault_config_file_missing_due_to_format_999">%1$s file ay hindi makita sa iyong vault folder. Siguraduhing ang file na ito ay matatagputan sa iyong vault folder sa cloud.</string>
 	<string name="error_vault_already_exists">Umiiral na ang vault na ito.</string>
 	<string name="error_no_such_file">Ang file na ito ay hindi pa umiiral.</string>
 	<string name="error_vault_has_been_locked">Naisara na ang vault.</string>
@@ -15,11 +18,20 @@
 	<string name="error_activity_not_found">Magdownload ng app na kayang buksan ang file na ito.</string>
 	<string name="error_server_not_found">Hindi mahanap ang server.</string>
 	<string name="error_device_policy_manager_not_found">Maaaring buksan ang device settings at sariling itakda ang screen lock</string>
+	<string name="error_export_illegal_file_name">Hindi nagtagumpay ang pag export. Subukang alisin ang mga special characters mula sa pangalan nang files at i-export muli.</string>
 	<string name="error_name_contains_invalid_characters">Hindi maaring maglagay ng espesyal na mga karakter.</string>
 	<string name="error_names_contains_invalid_characters">Hindi maaaring lagyan ng espesyal na karakter ang pangalan ng file.</string>
 	<string name="error_vault_name_contains_invalid_characters">Hindi maaaring lagyan ng espesyal na karakter ang pangalan ng file.</string>
+	<string name="error_general_update">Hindi nagtagumpay ang pag update. Karaniwang kamalian ay naganap.</string>
+	<string name="error_hash_mismatch_update">Hindi nagtagumpay ang pag update. Hindi nag tutugma ang calculated hash nang inupload na file</string>
+	<string name="error_update_no_internet">Hindi nagtagumpay ang pag update. Walang internet connection.</string>
+	<string name="error_failed_to_decrypt_webdav_password">Hindi ma decrypt ang WebDAV password, subukang i-dagdag multi ito sa settings</string>
 	<string name="error_play_services_not_available">Hindi naka-install ang Google Play Services</string>
 	<string name="error_biometric_auth_aborted">Kinansela ang biometric authentication</string>
+	<string name="error_vault_version_mismatch">Ang bersyon na nakasulat sa %1$s ay naiiba sa %2$s</string>
+	<string name="error_vault_key_invalid">%1$s ay naiiba sa %2$s</string>
+	<string name="error_vault_config_loading">Karaniwang kamalian habang nag lo-load ang vault config</string>
+	<string name="error_file_not_found_after_opening_using_3party">Ang lokal na file ay hindi na matagpuan pagkatapos lumipat sa Cryptomator. Maaaring hindi na ma-i upload pabalik sa cloud.</string>
 	<string name="error_no_such_bucket">Hindi matagpuan ang bucket na ito</string>
 	<string name="error_masterkey_location_not_supported">Hindi pa suportado ang custom Masterkey location</string>
 	<!-- # clouds -->
@@ -38,6 +50,7 @@
 	<string name="snack_bar_action_title_sort_oldest">Luma muna</string>
 	<string name="snack_bar_action_title_sort_biggest">Pinakamalaki muna</string>
 	<string name="snack_bar_action_title_sort_smallest">Pinakamaliit muna</string>
+	<string name="snack_bar_cryptomator_variants_title">Magbasa pa</string>
 	<!-- # screens -->
 	<!-- # screen: vault list -->
 	<string name="screen_vault_list_actions_title">Idagdag sa Cryptomator</string>
@@ -130,6 +143,7 @@
 	<string name="screen_settings_auto_lock_on_screen_lock">Kapag ang screen ay disabled</string>
 	<string name="screen_settings_section_auto_photo_upload_vault">Pumili ng vault pang upload</string>
 	<string name="screen_settings_section_auto_photo_upload_toggle">I-activate</string>
+	<string name="screen_settings_website_label">Website ng Cryptomator</string>
 	<string name="screen_settings_twitter_label">Sundan kami sa Twitter</string>
 	<string name="screen_settings_facebook_label">I-like kami sa Facebook</string>
 	<string name="screen_settings_section_legal">Ligal</string>
@@ -141,14 +155,17 @@
 	<string name="screen_settings_security_label">Mga pahiwatig ng seguridad</string>
 	<string name="screen_settings_section_version">Bersyon</string>
 	<string name="screen_settings_advanced_settings">Mga advanced na setting</string>
+	<string name="screen_settings_microsoft_apps_workaround_summary">Ibukas ang mga files sa Microsoft apps kasamang write permission</string>
 	<string name="screen_settings_background_unlock_preparation_label">Pabilisin ang pag-unlock</string>
 	<!-- ## screen: cloud settings -->
 	<!-- ## screen: licenses -->
 	<!-- ## screen: authenticate cloud -->
 	<!-- ## screen: cryptomator app variants -->
+	<string name="screen_cryptomator_variants_website_title">Website</string>
 	<!-- # dialogs -->
 	<string name="dialog_button_cancel">Kanselahin</string>
 	<string name="dialog_enter_password_positive_button">I-unlock</string>
+	<string name="dialog_change_password_old_password_label">Lumang Password</string>
 	<string name="dialog_change_password_new_password_label">Bagong Password</string>
 	<string name="dialog_change_password">Palitan ang password</string>
 	<string name="dialog_change_password_msg_old_password_empty">Hindi maaaring walang laman ang lumang password field.</string>
@@ -167,6 +184,7 @@
 	<string name="dialog_replace_msg_all_files_exists">Ang lahat ng files ay umiiral na. Nais mo bang palitan ang mga ito?</string>
 	<string name="dialog_replace_title_single_file_exists">Palitan ang file?</string>
 	<string name="dialog_replace_title_multiple_files_exist">Palitan ang mga file?</string>
+	<string name="dialog_unable_to_share_title">Hindi kayang i-share ang mga files</string>
 	<string name="dialog_unable_to_share_positive_button">OK</string>
 	<string name="dialog_unable_to_share_negative_button">Gumawa ng bagong vault</string>
 	<string name="dialog_filetype_not_supported_message">Mag-download ng app na kayang buksan ang file na ito o nais mo bang i-save sa iyong device?</string>
@@ -175,6 +193,7 @@
 	<string name="dialog_rename_node_file_title">Palitan ang pangalan ng file</string>
 	<string name="dialog_unsaved_changes_title">Mayroon kang hindi na i-save na pagbabago</string>
 	<string name="dialog_unsaved_changes_discard">Ibaliwala</string>
+	<string name="dialog_file_name_hint">Pangalan ng File</string>
 	<string name="dialog_delete_vault_message">Sigurado ka ba na nais mong alisin ang vault?</string>
 	<string name="dialog_delete_vault_hint">Ang aksyon na ito ay aalisin lamang ang vault sa listahan at hindi ito buburahin.</string>
 	<string name="dialog_progress_please_wait">Pakihintay&#8230;</string>
@@ -185,6 +204,7 @@
 	<string name="dialog_accept_ssl_certificate_hint">Hindi wasto ang SSL certificate. Nais mo paring pagkatiwalaan?</string>
 	<string name="dialog_accept_ssl_certificate_details">Mga detalye</string>
 	<string name="dialog_accept_ssl_certificate_security_checkbox">Maaaring panganib ito sa seguridad. Alam ko ang ginagawa ko.</string>
+	<string name="dialog_ask_ignore_battery_optimizations_checkbox">Huwag magtanong ulit?</string>
 	<string name="dialog_http_security_hint">Ang pag-gamit ng HTTP ay hindi ligtas. Kung alam mo ang mga panganib, maaari kang tumuloy gamit ang HTTP.</string>
 	<string name="dialog_http_security_checkbox">Gawing HTTPS</string>
 	<string name="dialog_http_security_title">Gamiting ang HTTPS?</string>
@@ -204,6 +224,7 @@
 	<string name="dialog_enter_license_decline_button">I-sara</string>
 	<string name="dialog_license_confirmation_message">Salamat %1$s sa pagbigay ng wastong lisensya.</string>
 	<string name="dialog_update_available_update">I-update ngayon</string>
+	<string name="dialog_update_available_download_site">Pumunta sa download site</string>
 	<string name="dialog_update_available_cancel">Mamaya</string>
 	<string name="dialog_sym_link_title">Ang folder na ito ay isang symbolic link</string>
 	<string name="dialog_sym_link_message">Hindi maaaring puntahan ang symbolic link na ito</string>
@@ -242,6 +263,7 @@
 	<string name="notification_lock_all">I-lock lahat</string>
 	<string name="notification_cancel_auto_upload">Ikansela ang pag-upload</string>
 	<string name="notification_auto_upload_message">Uploading %1d/%2d</string>
+	<string name="notification_update_check_finished_latest">Naka-install ang pinakabagong bersyon</string>
 	<string name="screen_settings_lru_cache">Cache</string>
 	<string name="screen_settings_lru_cache_size">Kabuuang laki ng cache</string>
 	<string name="screen_settings_clear_lru_cache_size">Linisin ang Cache</string>

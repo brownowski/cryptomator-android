@@ -38,6 +38,7 @@ import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
+import kotlin.system.exitProcess
 import timber.log.Timber
 
 @PerView
@@ -99,10 +100,15 @@ class SettingsPresenter @Inject internal constructor(
 	}
 
 	fun grantLocalStoragePermissionForAutoUpload() {
+		val permissions = if (Build.VERSION.SDK_INT > Build.VERSION_CODES.S_V2) {
+			arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+		} else {
+			arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+		}
 		requestPermissions(
 			PermissionsResultCallbacks.onLocalStoragePermissionGranted(),  //
 			R.string.permission_snackbar_auth_auto_upload,  //
-			Manifest.permission.READ_EXTERNAL_STORAGE
+			*permissions
 		)
 	}
 
@@ -192,6 +198,11 @@ class SettingsPresenter @Inject internal constructor(
 					context().startActivity(intent)
 				}
 			})
+	}
+
+	fun restartApp() {
+		// process gets restarted so just exit it
+		exitProcess(0)
 	}
 
 	private inner class CreateErrorReportArchiveTask : AsyncTask<Void?, IOException?, File?>() {
