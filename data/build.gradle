@@ -103,9 +103,9 @@ dependencies {
 
 	implementation project(':domain')
 	implementation project(':util')
-	playstoreImplementation project(':pcloud-sdk-java')
-	apkstoreImplementation project(':pcloud-sdk-java')
-	fdroidImplementation project(':pcloud-sdk-java')
+	playstoreImplementation dependencies.pcloud
+	apkstoreImplementation dependencies.pcloud
+	fdroidImplementation dependencies.pcloud
 
 	coreLibraryDesugaring dependencies.coreDesugaring
 
@@ -222,14 +222,6 @@ dependencies {
 
 configurations {
 	all*.exclude group: 'com.google.android', module: 'android'
-}
-
-def liteFlavor() {
-	gradle.startParameter.taskNames.stream().filter(t -> t.toLowerCase().contains("lite")).findAny().isPresent()
-}
-
-def getApiKey(key) {
-	return !liteFlavor() ? System.getenv().getOrDefault(key, "") : ""
 }
 
 tasks.withType(Test) {
